@@ -1,0 +1,6 @@
+target/*
+!target/bsplay-backend-*.jar
+*.log
+.env
+.env.*
+!.env.example
