@@ -80,7 +80,23 @@ class RoomApiIntegrationTest {
         mockMvc.perform(get("/api/v1/rooms/{code}/game", code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RUNNING"))
-                .andExpect(jsonPath("$.remainingNumbers").value(90));
+                .andExpect(jsonPath("$.remainingNumbers").value(90))
+                .andExpect(jsonPath("$.automaticBingoDetectionEnabled").value(false))
+                .andExpect(jsonPath("$.stopOnBingoEnabled").value(true))
+                .andExpect(jsonPath("$.winnerAnnouncementEnabled").value(true));
+
+        mockMvc.perform(patch("/api/v1/rooms/{code}/game/settings", code)
+                        .header("Authorization", "Bearer " + hostToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"lineEnabled":true,"doubleLineEnabled":true,"bingoEnabled":true,
+                                 "rankingPublic":true,"automaticBingoDetectionEnabled":true,
+                                 "stopOnBingoEnabled":false,"winnerAnnouncementEnabled":false}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.automaticBingoDetectionEnabled").value(true))
+                .andExpect(jsonPath("$.stopOnBingoEnabled").value(false))
+                .andExpect(jsonPath("$.winnerAnnouncementEnabled").value(false));
 
         mockMvc.perform(get("/api/v1/rooms/{code}/game/cards/me", code)
                         .header("Authorization", "Bearer " + playerToken))
@@ -129,5 +145,48 @@ class RoomApiIntegrationTest {
         mockMvc.perform(get("/api/v1/rooms/{code}/game", code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    @Test
+    void detectsDigitalBingoStopsRoundAndPublishesWinner() throws Exception {
+        String createdBody = mockMvc.perform(post("/api/v1/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roomName":"Bingo automático","hostName":"Marta","maxPlayers":8}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode created = objectMapper.readTree(createdBody);
+        String code = created.path("room").path("code").asText();
+        String hostToken = created.path("token").asText();
+
+        mockMvc.perform(post("/api/v1/rooms/{code}/start", code)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/api/v1/rooms/{code}/game/settings", code)
+                        .header("Authorization", "Bearer " + hostToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"lineEnabled":true,"doubleLineEnabled":true,"bingoEnabled":true,
+                                 "rankingPublic":true,"automaticBingoDetectionEnabled":true,
+                                 "stopOnBingoEnabled":true,"winnerAnnouncementEnabled":true}
+                                """))
+                .andExpect(status().isOk());
+
+        JsonNode snapshot = null;
+        for (int draw = 0; draw < 90; draw++) {
+            String drawBody = mockMvc.perform(post("/api/v1/rooms/{code}/game/draws", code)
+                            .header("Authorization", "Bearer " + hostToken))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            snapshot = objectMapper.readTree(drawBody);
+            if ("ROUND_FINISHED".equals(snapshot.path("status").asText())) break;
+        }
+
+        org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
+        org.junit.jupiter.api.Assertions.assertEquals("ROUND_FINISHED", snapshot.path("status").asText());
+        org.junit.jupiter.api.Assertions.assertTrue(snapshot.path("claims").findValuesAsText("prizeType").contains("BINGO"));
+        org.junit.jupiter.api.Assertions.assertTrue(snapshot.path("claims").findValuesAsText("status").contains("APPROVED"));
     }
 }

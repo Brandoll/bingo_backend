@@ -4,5 +4,8 @@ public record GameSettingsRequest(
         boolean lineEnabled,
         boolean doubleLineEnabled,
         boolean bingoEnabled,
-        boolean rankingPublic
+        boolean rankingPublic,
+        boolean automaticBingoDetectionEnabled,
+        boolean stopOnBingoEnabled,
+        boolean winnerAnnouncementEnabled
 ) {}

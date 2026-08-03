@@ -227,10 +227,14 @@ public class GameApplicationService {
     @Transactional
     public GameSnapshotResponse updateSettings(String code, GuestPrincipal principal,
                                                boolean lineEnabled, boolean doubleLineEnabled,
-                                               boolean bingoEnabled, boolean rankingPublic) {
+                                               boolean bingoEnabled, boolean rankingPublic,
+                                               boolean automaticBingoDetectionEnabled,
+                                               boolean stopOnBingoEnabled,
+                                               boolean winnerAnnouncementEnabled) {
         Room room = requireRoomAndPrincipal(code, principal, true);
         GameEntity game = latestForUpdate(room.getId());
-        game.updateSettings(lineEnabled, doubleLineEnabled, bingoEnabled, rankingPublic);
+        game.updateSettings(lineEnabled, doubleLineEnabled, bingoEnabled, rankingPublic,
+                automaticBingoDetectionEnabled, stopOnBingoEnabled, winnerAnnouncementEnabled);
         GameSnapshotResponse snapshot = toSnapshot(games.save(game));
         events.publish("GAME_SETTINGS_UPDATED", snapshot);
         return snapshot;
@@ -317,7 +321,7 @@ public class GameApplicationService {
                 throw new GameDomainException("PRIZE_NOT_EARNED", "El cartón no cumple el premio solicitado.");
             }
             claim.approve(principal.memberId(), clock.instant());
-            if (claim.getPrizeType() == PrizeType.BINGO) game.finish(clock.instant());
+            if (claim.getPrizeType() == PrizeType.BINGO && game.isStopOnBingoEnabled()) game.finish(clock.instant());
         } else {
             claim.reject(principal.memberId(), reason == null ? "Solicitud rechazada por el host." : reason.trim(), clock.instant());
         }
@@ -377,11 +381,32 @@ public class GameApplicationService {
         int number = remaining.get(random.nextInt(remaining.size()));
         int order = game.registerDraw();
         draws.save(new DrawnNumberEntity(game.getId(), number, order, actor, now));
+        alreadyDrawn.add(number);
+        detectAutomaticDigitalBingo(game, alreadyDrawn, actor, now);
         game.scheduleNextAutomaticDraw(now);
         games.save(game);
         GameSnapshotResponse snapshot = toSnapshot(game);
         events.publish(eventType, snapshot);
         return snapshot;
+    }
+
+    private void detectAutomaticDigitalBingo(GameEntity game, Set<Integer> drawn, UUID actor, Instant now) {
+        if (!game.isAutomaticBingoDetectionEnabled() || !game.isBingoEnabled()) return;
+        boolean winnerDetected = false;
+        for (GameCardEntity card : cards.findByGameIdAndActiveTrueOrderByAssignedAtAsc(game.getId())) {
+            if (card.getCardType() != CardType.DIGITAL
+                    || !PrizeEligibility.isEligible(card.getGrid(), drawn, PrizeType.BINGO)
+                    || claims.existsByGameIdAndGameCardIdAndPrizeTypeAndStatus(
+                    game.getId(), card.getId(), PrizeType.BINGO, ClaimStatus.PENDING)
+                    || claims.existsByGameIdAndGameCardIdAndPrizeTypeAndStatus(
+                    game.getId(), card.getId(), PrizeType.BINGO, ClaimStatus.APPROVED)) continue;
+            PrizeClaimEntity claim = new PrizeClaimEntity(
+                    game.getId(), card.getId(), card.getMemberId(), PrizeType.BINGO, now);
+            claim.approve(actor, now);
+            claims.save(claim);
+            winnerDetected = true;
+        }
+        if (winnerDetected && game.isStopOnBingoEnabled()) game.finish(now);
     }
 
     private void assignDigitalCards(GameEntity game, Room room) {
@@ -459,7 +484,8 @@ public class GameApplicationService {
         return new GameSnapshotResponse(game.getId(), game.getRoomId(), game.getRoundNumber(), game.getStatus(),
                 current, previous, drawn, 90 - drawn.size(), game.isAutomaticDrawEnabled(),
                 game.getAutomaticDrawIntervalSeconds(), game.isLineEnabled(), game.isDoubleLineEnabled(),
-                game.isBingoEnabled(), game.isRankingPublic(), game.getStartedAt(), game.getPausedAt(),
+                game.isBingoEnabled(), game.isRankingPublic(), game.isAutomaticBingoDetectionEnabled(),
+                game.isStopOnBingoEnabled(), game.isWinnerAnnouncementEnabled(), game.getStartedAt(), game.getPausedAt(),
                 game.getEndedAt(), ranking, claimResponses);
     }
 

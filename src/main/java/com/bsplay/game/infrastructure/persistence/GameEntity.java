@@ -22,6 +22,9 @@ public class GameEntity {
     @Column(name = "double_line_enabled", nullable = false) private boolean doubleLineEnabled;
     @Column(name = "bingo_enabled", nullable = false) private boolean bingoEnabled;
     @Column(name = "ranking_public", nullable = false) private boolean rankingPublic;
+    @Column(name = "automatic_bingo_detection_enabled", nullable = false) private boolean automaticBingoDetectionEnabled;
+    @Column(name = "stop_on_bingo_enabled", nullable = false) private boolean stopOnBingoEnabled;
+    @Column(name = "winner_announcement_enabled", nullable = false) private boolean winnerAnnouncementEnabled;
     @Column(name = "started_at", nullable = false) private Instant startedAt;
     @Column(name = "paused_at") private Instant pausedAt;
     @Column(name = "ended_at") private Instant endedAt;
@@ -41,6 +44,9 @@ public class GameEntity {
         game.doubleLineEnabled = true;
         game.bingoEnabled = true;
         game.rankingPublic = true;
+        game.automaticBingoDetectionEnabled = false;
+        game.stopOnBingoEnabled = true;
+        game.winnerAnnouncementEnabled = true;
         game.startedAt = now;
         return game;
     }
@@ -104,11 +110,15 @@ public class GameEntity {
     }
 
     public void updateSettings(boolean lineEnabled, boolean doubleLineEnabled, boolean bingoEnabled,
-                               boolean rankingPublic) {
+                               boolean rankingPublic, boolean automaticBingoDetectionEnabled,
+                               boolean stopOnBingoEnabled, boolean winnerAnnouncementEnabled) {
         this.lineEnabled = lineEnabled;
         this.doubleLineEnabled = doubleLineEnabled;
         this.bingoEnabled = bingoEnabled;
         this.rankingPublic = rankingPublic;
+        this.automaticBingoDetectionEnabled = automaticBingoDetectionEnabled;
+        this.stopOnBingoEnabled = stopOnBingoEnabled;
+        this.winnerAnnouncementEnabled = winnerAnnouncementEnabled;
     }
 
     public boolean isPrizeEnabled(com.bsplay.game.domain.model.PrizeType type) {
@@ -135,6 +145,9 @@ public class GameEntity {
     public boolean isDoubleLineEnabled() { return doubleLineEnabled; }
     public boolean isBingoEnabled() { return bingoEnabled; }
     public boolean isRankingPublic() { return rankingPublic; }
+    public boolean isAutomaticBingoDetectionEnabled() { return automaticBingoDetectionEnabled; }
+    public boolean isStopOnBingoEnabled() { return stopOnBingoEnabled; }
+    public boolean isWinnerAnnouncementEnabled() { return winnerAnnouncementEnabled; }
     public Instant getStartedAt() { return startedAt; }
     public Instant getPausedAt() { return pausedAt; }
     public Instant getEndedAt() { return endedAt; }

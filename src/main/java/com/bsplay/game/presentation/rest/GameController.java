@@ -92,7 +92,8 @@ public class GameController {
                                          @RequestBody GameSettingsRequest request,
                                          @AuthenticationPrincipal GuestPrincipal principal) {
         return service.updateSettings(code, principal, request.lineEnabled(), request.doubleLineEnabled(),
-                request.bingoEnabled(), request.rankingPublic());
+                request.bingoEnabled(), request.rankingPublic(), request.automaticBingoDetectionEnabled(),
+                request.stopOnBingoEnabled(), request.winnerAnnouncementEnabled());
     }
 
     @GetMapping("/cards/me")
